@@ -2,7 +2,7 @@ from openai import OpenAI
 import os
 import json
 from dotenv import load_dotenv
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 # Load environment variables
 load_dotenv()
@@ -41,7 +41,7 @@ def fill_in_the_middle_prompt(
     return prompt + response.choices[0].text + suffix
 
 
-def json_prompt(prompt: str, model: str = DEEPSEEK_V3_MODEL) -> dict:
+def json_prompt(prompt: str, model: str = DEEPSEEK_V3_MODEL, system_prompt: str ="") -> dict:
     """
     Send a prompt to DeepSeek and get JSON response.
 
@@ -53,7 +53,7 @@ def json_prompt(prompt: str, model: str = DEEPSEEK_V3_MODEL) -> dict:
     Returns:
         dict: The parsed JSON response
     """
-    messages = [{"role": "user", "content": prompt}]
+    messages = [{"role":"system", "content": system_prompt},{"role": "user", "content": prompt}]
 
     response = client.chat.completions.create(
         model=model, messages=messages, response_format={"type": "json_object"}
