@@ -5,6 +5,7 @@ import json
 import time
 import webbrowser
 from connections.google.google_oauth_client import GoogleOAuthClient
+from modules.app_actions.discord.executive_director_bot import bot
 
 TOKENS_DIR = "tokens"
 
@@ -100,6 +101,8 @@ def main():
             setup_integrations_submenu()
         elif choice == '2':
             print("Starting scheduled workflow system...")
+            TOKEN = os.getenv('DISCORD_BOT_TOKEN')
+            bot.run(TOKEN)
             # Assuming trigger is implemented
             print("Press Ctrl+C to stop.")
             try:
