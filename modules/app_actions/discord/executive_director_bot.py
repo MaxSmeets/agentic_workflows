@@ -4,6 +4,7 @@ import discord
 from discord.ext import commands
 from dotenv import load_dotenv
 from modules.ai_modules.models.deepseek import conversational_prompt, json_prompt
+from modules.ai_modules.speech_to_text import transcribe_audio
 
 # Load environment variables
 load_dotenv()
@@ -38,20 +39,41 @@ async def on_ready():
 
 @bot.event
 async def on_message(message):
-    # Ignore bot's own messages
+    # Ignore the bot's own messages
     if message.author == bot.user:
         return
-    
-    await bot.process_commands(message)  # Ensure commands still work
 
-    # Check if the message is from the correct guild and channel
+    # Ensure commands still work
+    await bot.process_commands(message)
+
+    # Check if the message is from the correct guild
     if message.guild.id != int(GUILD):
         print("Unauthorized guild")
         return
 
+    # Print the message content for debugging
+    print(str(message.content))
+
+    # Process attachments
+    if message.attachments:
+        for attachment in message.attachments:
+            # Check if the attachment is an audio file (e.g., .ogg, .mp3)
+            if attachment.filename.endswith(('.ogg', '.mp3', '.wav')):
+                # Save the file to the local project directory
+                file_path = f"{attachment.filename}"
+                await attachment.save(file_path)
+                print(f"Downloaded voice message: {file_path}")
+                transcription = transcribe_audio(file_path, 'tiny')
+                text = transcription.get('text')
+                #evaluate transribed message
+                await evaluate_message(text, message.channel)
+                os.remove(file_path)
+                return
+
     # Process non-command messages
     if not message.content.startswith("!"):
         await evaluate_message(message.content, message.channel)
+
 
 def conversation_from_message(message, system_prompt):
     messages = [
@@ -101,7 +123,14 @@ async def evaluate_message(message, channel):
             print(f"Processing intent: {intent}, content: {content}")
             
             if intent == "general":
-                system_prompt = 'You are Luna, the executive director of Apricot Labs. You like to communicate in a concise and friendly manner. Always being straight to the point.'
+                system_prompt = f'''
+                You are Luna, the executive director of Apricot Labs. You like to communicate in a concise and friendly manner. Always being straight to the point.
+                You have knowledge of Apricot Labs' hierarchy: 
+                {hierarchy}
+
+                **Instructions**
+                - Workers under you cannot be contacted directly by the user, you will offer to pass a message to them.
+                '''
                 response = conversation_from_message(message=content, system_prompt=system_prompt)
                 await channel.send(response)
             elif intent == "delegate_tasks":
@@ -110,7 +139,7 @@ async def evaluate_message(message, channel):
                 task = delegation_response.get("task")
                 await channel.send(f"**Luna:** @*{manager}* {task}")              
                 await channel.send(f"**{manager}:** Delegated {task}")
-        await channel.send(f"**Luna:** All requests executed")
+            await channel.send(f"**Luna:** All requests executed")
                 
                 
         return "I'm not sure how to handle that."

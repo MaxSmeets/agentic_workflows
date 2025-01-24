@@ -26,7 +26,7 @@ def is_tokens_set(app_name: str) -> bool:
 def setup_integrations_submenu():
     """Displays a sub-menu for 3rd party integrations."""
     while True:
-        google_status = "SET" if is_tokens_set("google_drive") else "NOT SET"
+        google_status = "SET" if is_tokens_set("google") else "NOT SET"
         print("\n====== 3rd Party Integrations Menu ======")
         print(f"1. Google Drive Integration [ {google_status} ]")
         print("2. Back to Main Menu")
