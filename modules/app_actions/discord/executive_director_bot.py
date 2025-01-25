@@ -3,13 +3,17 @@ import os
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
-from modules.ai_modules.models.deepseek import conversational_prompt, json_prompt
+from modules.ai_modules.models.deepseek import DeepSeekModel
 from modules.ai_modules.speech_to_text import transcribe_audio
+from agents.managers.base_manager import BaseManager
+from agents.managers.manager_config import managers_config
+from datetime import datetime
+
 
 # Load environment variables
 load_dotenv()
-
 GUILD = os.getenv('DISCORD_GUILD_ID')  # Add guild ID to .env
+
 
 # Bot setup
 intents = discord.Intents.default()  # Adjust intents based on functionality
@@ -82,7 +86,7 @@ def conversation_from_message(message, system_prompt):
             "content": message
         }
     ]
-    results = conversational_prompt(messages=messages, system_prompt=system_prompt)
+    results = DeepSeekModel.conversational_prompt(DeepSeekModel, messages=messages, system_prompt=system_prompt)
     return results
 
 async def evaluate_message(message, channel):
@@ -137,8 +141,29 @@ async def evaluate_message(message, channel):
                 delegation_response = await delegate_task(content)
                 manager = delegation_response.get("manager")
                 task = delegation_response.get("task")
-                await channel.send(f"**Luna:** @*{manager}* {task}")              
-                await channel.send(f"**{manager}:** Delegated {task}")
+                await channel.send(f"**Luna:** @*{manager}* {task}")
+                name = managers_config[manager]['name']
+                role = managers_config[manager]['role']
+                manager_model = DeepSeekModel(
+                    system_prompt=f"""
+                    You are {name}, the {role} of Apricot Labs.
+
+                    Context:
+                    - Today is {datetime.now().strftime('%A')}, {datetime.now().strftime('%Y-%m-%d')}.
+                    - Use this information to resolve any relative time references in the task description (e.g., "next Monday" should be resolved to the specific date).
+
+                    Instructions:
+                    - Your role is to generate a JSON response with the workflow name or names that best match the prompt.
+                    - If no end time is specified, set the end time to 1 hour later by default.
+                    - Only respond with the key "workflow" and the name of that workflow as described in the workflow overview below:
+
+                    {managers_config[manager]} 
+                    """,
+                    prompt_type="json"
+                )
+                manager_instance = BaseManager(model=manager_model, role=role, name=name)
+                manager_result = manager_instance.run(text=task)
+                await channel.send(f"**{manager}:** {manager_result}")
             await channel.send(f"**Luna:** All requests executed")
                 
                 
@@ -149,24 +174,36 @@ async def evaluate_message(message, channel):
         return "Error processing your request. Please try again."
 
 async def delegate_task(task):
-    system_prompt = '''
-                    You are gonna assign tasks to their respective managers.
+    # Get the current date and day of the week
+    current_date = datetime.now().strftime('%Y-%m-%d')  # Format: YYYY-MM-DD
+    current_day = datetime.now().strftime('%A')  # Full day name (e.g., Monday)
 
-                    Tasks:
-                    - For the given input task, choose from one of the following managers:
-                        - Research manager (Eric): Used for looking up knowledge from online sources.
-                        - Communication manager (Grace): Used for accessing communication platforms and interacting with messages and inboxes.
-                        - Project manager (Sam): Used for interacting with calendar and to-do related tasks.
-                    - When defining the task avoid vague time descriptions like in a hour or next monday.
-                    - Respond in the following json format:
+    # Update the system prompt to include these values
+    system_prompt = f'''
+    You are going to assign tasks to their respective managers.
 
-                        <output_format>
-                        [
-                            {
-                                "manager": "manager name e.g Eric",
-                                "task": "task description"
-                            }
-                        ]
-                    '''
-    result = json_prompt(prompt=task, system_prompt=system_prompt)
+    Context:
+    - Today is {current_day}, {current_date}.
+    - You should use this information to correctly interpret any relative time references (e.g., "next Monday").
+
+    Tasks:
+    - For the given input task, choose from one of the following managers:
+        - Research manager (Eric): Used for looking up knowledge from online sources.
+        - Communication manager (Grace): Used for accessing communication platforms and interacting with messages and inboxes.
+        - Project manager (Sam): Used for interacting with calendar and to-do-related tasks.
+
+    Instructions:
+    - When defining the task, avoid vague time descriptions like "in an hour" or "next Monday."
+    - Always resolve relative dates into absolute dates based on today's date ({current_date}).
+
+    Respond in the following JSON format:
+
+    {{
+        "manager": "manager name (e.g., Eric)",
+        "task": "task description with resolved absolute date"
+    }}
+    '''
+
+    result = DeepSeekModel.json_prompt(DeepSeekModel, prompt=task, system_prompt=system_prompt)
     return result
+
