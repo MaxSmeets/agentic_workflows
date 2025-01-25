@@ -6,7 +6,9 @@ import time
 import webbrowser
 from connections.google.google_oauth_client import GoogleOAuthClient
 from modules.app_actions.discord.executive_director_bot import bot
-
+from agents.base_agent import BaseAgent
+from modules.ai_modules.models.deepseek import DeepSeekModel
+from workflows.my_workflows.entrypoint import OnDiscordMessageWorkflow
 TOKENS_DIR = "tokens"
 
 
@@ -36,7 +38,7 @@ def setup_integrations_submenu():
         if choice == '1':
             # Run the Google OAuth flow
             run_google_oauth(
-                scopes=["https://www.googleapis.com/auth/drive"], app_name="google"
+                scopes=["https://www.googleapis.com/auth/drive", 'https://www.googleapis.com/auth/calendar'], app_name="google"
             )
         elif choice == '2':
             # Return to the main menu
@@ -91,9 +93,10 @@ def run_google_oauth(scopes: list, app_name: str) -> None:
 def main():
     while True:
         print("\n========== MAIN MENU ==========")
-        print("1. Set 3rd party integrations (Google OAuth2)")
+        print("1. Set 3rd party integrations")
         print("2. Activate workforce (start scheduled triggers)")
-        print("3. Quit")
+        print("3. Run test agent for functionality testing")
+        print("4. Quit")
 
         choice = input("Enter your choice (1, 2, or 3): ").strip()
 
@@ -101,8 +104,7 @@ def main():
             setup_integrations_submenu()
         elif choice == '2':
             print("Starting scheduled workflow system...")
-            TOKEN = os.getenv('DISCORD_BOT_TOKEN')
-            bot.run(TOKEN)
+            OnDiscordMessageWorkflow.execute(OnDiscordMessageWorkflow)
             # Assuming trigger is implemented
             print("Press Ctrl+C to stop.")
             try:
@@ -110,7 +112,25 @@ def main():
                     time.sleep(1)
             except KeyboardInterrupt:
                 print("\nStopping...")
-        elif choice == '3':
+        elif choice =='3':
+            system_prompt = "You are an AI agent and will give me a mock json list of"
+            # Now bring in our DeepSeekModel
+            deepseek_model = DeepSeekModel(
+                model_name="deepseek-chat",
+                system_prompt=system_prompt,
+                prompt_type="json"
+            )
+
+            agent = BaseAgent(
+                model=deepseek_model,
+                memory=None,
+                tools=[]
+            )
+
+
+            result = agent.run("3 fictional patients and some mock data")
+            print(result)
+        elif choice == '4':
             print("Goodbye!")
             break
         else:
